@@ -572,6 +572,10 @@ final class Tools {
                     return text("APPROVED automatically: the user trusts " + frontName() + ", so work on "
                             + "your own there without calling confirm. Apps on Hard or Smart still ask the user.");
                 }
+                if (front != null && Guard.lockedDown(svc, front) && !ruleRun()) { // one card, on the action itself
+                    return text("NO CARD NEEDED: in " + frontName() + " Buddy asks the user on every action itself, with "
+                            + "the action on the card. Go ahead with it; if the user says no, you'll be told.");
+                }
                 String summary = a.getString("summary");
                 if (!ruleRun() && front != null && Guard.routineText(summary) && Guard.runRule(svc, front)) {
                     // the user allowed this app until the run ends: no card for the agent's question. Nothing is kept
@@ -943,6 +947,14 @@ final class Tools {
             AccessibilityNodeInfo root = w.getRoot();
             if (root != null && root.getPackageName() != null) pkgs.add(root.getPackageName().toString());
         }
+        if (shadeOpen() && !Guard.mayView(caller, SHADE)) { // every app's notifications, private ones too
+            String answer = svc.askConfirm(svc.getString(R.string.tools_card_view_notifications));
+            if (!answer.startsWith("APPROVED")) {
+                return "BLOCKED by Buddy's safety rule: the user did not let you see their notifications. Don't retry "
+                        + "it; ask the user what they want.";
+            }
+            Guard.allowView(caller, SHADE);
+        }
         for (String pkg : pkgs) {
             if (!Guard.privateApp(svc, pkg) || Guard.mayView(caller, pkg)) continue;
             String app = appName(pkg);
@@ -961,7 +973,28 @@ final class Tools {
     private boolean unseen(AccessibilityNodeInfo root) {
         String pkg = str(root.getPackageName());
         String caller = McpServer.CALLER_KEY.get();
-        return Guard.privateApp(svc, pkg) && !Guard.mayView(caller == null ? Background.OUTSIDE : caller, pkg);
+        if (caller == null) caller = Background.OUTSIDE;
+        if (SYSTEM_UI.equals(pkg) && big(root)) return !Guard.mayView(caller, SHADE);
+        return Guard.privateApp(svc, pkg) && !Guard.mayView(caller, pkg);
+    }
+
+    /** privateGate's key for the notification shade and lock screen (they show every app's notifications). */
+    private static final String SHADE = ":notifications";
+    private static final String SYSTEM_UI = "com.android.systemui";
+
+    /** The notification shade or lock screen is up: a System UI window over half the screen (the status bar is a strip). */
+    private boolean shadeOpen() {
+        for (AccessibilityWindowInfo w : windows()) {
+            AccessibilityNodeInfo root = w.getRoot();
+            if (root != null && SYSTEM_UI.equals(str(root.getPackageName())) && big(root)) return true;
+        }
+        return false;
+    }
+
+    private boolean big(AccessibilityNodeInfo root) {
+        Rect r = new Rect();
+        root.getBoundsInScreen(r);
+        return r.height() > svc.getResources().getDisplayMetrics().heightPixels / 2;
     }
 
     private String appName(String pkg) {
@@ -1957,7 +1990,10 @@ final class Tools {
             // "Send" in a money app (no send for a rule, but what the user's "Send 50 to Anna" was for), nor a
             // switch or a button on the user's list, which have no such word
             boolean other = !send && (Guard.otherRisk(target) || Guard.otherRisk(hit));
-            return guardAction(what, card, draft == null ? null : draft.toString(), send, byRule, other);
+            // in a locked-down app the card is for this very tap: an approval given for something else (the agent's
+            // confirm) isn't spent on it. A send still takes one given for its very text
+            boolean fresh = Guard.lockedDown(svc, pkg) && (!send || draft == null || draft.toString().trim().isEmpty());
+            return guardAction(what, card, draft == null ? null : draft.toString(), send, byRule, other, fresh);
         }
         if (!"smart".equals(mode)) return null;
         return review(what, card, target, draft == null ? null : draft.toString(),
@@ -2017,8 +2053,14 @@ final class Tools {
     /** otherRisk: a risky button that doesn't send, which an approval given only for sending doesn't cover. */
     private String guardAction(String what, java.util.function.Function<String, String> card, String detail, boolean send,
                                boolean byRule, boolean otherRisk) throws InterruptedException {
+        return guardAction(what, card, detail, send, byRule, otherRisk, false);
+    }
+
+    /** fresh: only a card answered now approves it (see guard). */
+    private String guardAction(String what, java.util.function.Function<String, String> card, String detail, boolean send,
+                               boolean byRule, boolean otherRisk, boolean fresh) throws InterruptedException {
         // a send's detail is the message itself: an approval for another text doesn't cover it (a card asks instead)
-        if (Guard.takeApproval(send, send ? detail : null, otherRisk)) return null;
+        if (!fresh && Guard.takeApproval(send, send ? detail : null, otherRisk)) return null;
         String app = frontName();
         if (byRule) {
             noteInChat(McpServer.CALLER_CHAT.get(), svc.getString(R.string.run_rule_approved, card.apply(app)));
@@ -2155,8 +2197,9 @@ final class Tools {
             final AccessibilityNodeInfo field = target;
             java.util.function.BooleanSupplier byRule = () -> send && !field.isPassword() && Guard.runRule(svc,
                     str(field.getPackageName()), web || Guard.browser(svc, field.getPackageName()));
+            boolean locked = Guard.lockedDown(svc, str(target.getPackageName()));
             String blocked = search ? null
-                    : "hard".equals(mode) ? guardAction("Press Enter to send", card, text, send, byRule.getAsBoolean())
+                    : "hard".equals(mode) || locked ? guardAction("Press Enter to send", card, text, send, byRule.getAsBoolean())
                     : "smart".equals(mode) ? review("Press Enter to send", card, target, text, byRule) : null;
             if (blocked != null) return result + " Not sent: " + blocked;
             Thread.sleep(150);

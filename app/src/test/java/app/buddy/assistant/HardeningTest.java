@@ -89,17 +89,6 @@ public class HardeningTest {
         assertFalse(Guard.lockedDown(c, "com.ebay.mobile"));
     }
 
-    @Test
-    public void inTheBackgroundBrowserOnlyPlainLinksGoWithoutAsking() throws Exception {
-        assertTrue(BrowserTools.plainLink(new JSONObject().put("role", "link").put("href", "/orders")));
-        assertTrue(BrowserTools.plainLink(new JSONObject().put("role", "link").put("href", "https://example.com/a")));
-        assertFalse(BrowserTools.plainLink(new JSONObject().put("role", "link").put("href", "#")));
-        assertFalse(BrowserTools.plainLink(new JSONObject().put("role", "link").put("href", " JavaScript:pay()")));
-        assertFalse(BrowserTools.plainLink(new JSONObject().put("role", "link").put("href", "")));
-        assertFalse(BrowserTools.plainLink(new JSONObject().put("role", "button").put("href", "/orders")));
-        assertFalse(BrowserTools.plainLink(new JSONObject().put("role", "input")));
-    }
-
     // ------------------------------------------------------------------ shells and background mode
 
     private static void stepTo(String name) throws Exception {

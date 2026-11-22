@@ -247,8 +247,10 @@ final class BrowserTools {
         boolean allow = Guard.listed(svc, "allow", label, null); // the user said: never ask for this one
         // A page can be any shop or bank, signed in: only a plain link (it just goes to another page) goes without
         // asking; a button, a field, a script's link ("#", "javascript:") or anything else asks, whatever its words
-        if (!allow && (Guard.listed(svc, "ask", label, null) || !plainLink(t) || (Prefs.guardBuiltin(svc) && risky != null))) {
-            String name = label.isEmpty() ? risky : label;
+        // A page can be any shop or bank, signed in, and a link's script can pay as well as a button's: every click
+        // asks, unless the user listed that label as never asking
+        if (!allow) {
+            String name = !label.isEmpty() ? label : risky != null ? risky : t.optString("role", "this");
             String blocked = approve("Tap “" + name + "”", svc.getString(R.string.browser_card_tap, name, host),
                     t.optString("draft", ""), Guard.sendsText(name));
             if (blocked != null) return blocked;
@@ -314,12 +316,6 @@ final class BrowserTools {
         return r;
     }
 
-    /** A link that only goes to another page (a real href, not "#" or a script): what a click may do without asking. */
-    static boolean plainLink(JSONObject t) {
-        String href = t.optString("href", "").trim().toLowerCase(Locale.ROOT);
-        return "link".equals(t.optString("role")) && !href.isEmpty() && !href.startsWith("#") && !href.startsWith("javascript:");
-    }
-
     private String type(String key, int ref, String text, boolean append, boolean submit) throws Exception {
         JSONObject f = (JSONObject) Browser.eval(key, "__buddy.focus(" + ref + ", " + append + ")");
         if (f.optBoolean("missing")) return stale(ref);
@@ -343,8 +339,8 @@ final class BrowserTools {
                 + (f.optString("label").isEmpty() ? "" : " “" + f.optString("label") + "”") + ".";
         if (!submit) return result;
         // Enter in a search box only searches; in a message box or a form sent by a risky button it sends
-        boolean risky = !f.optBoolean("search"); // Enter sends whatever form it's in: only a search box's goes without asking
-        if (risky) {
+        boolean risky = true; // Enter sends whatever form it's in, and a page names its own fields "search": it asks
+        {
             String blocked = approve("Press Enter to send", svc.getString(R.string.browser_card_enter, host(key)), text, true);
             if (blocked != null) return result + " Not sent: " + blocked;
         }
@@ -466,7 +462,8 @@ final class BrowserTools {
      * would send, shown on the card (may be empty).
      */
     private String approve(String what, String card, String draft, boolean send) throws InterruptedException {
-        if (Guard.takeApproval(send)) return null;
+        // only a card answered now approves it, but for a message the agent's confirm already showed word for word
+        if (send && draft != null && !draft.trim().isEmpty() && Guard.takeApproval(true, draft)) return null;
         String summary = draft == null || draft.trim().isEmpty() ? card
                 : svc.getString(R.string.tools_card_detail, card, svc.getString(R.string.tools_card_quote, ChatHub.clip(draft.trim(), 300)));
         String answer = svc.askConfirm(summary, false);
