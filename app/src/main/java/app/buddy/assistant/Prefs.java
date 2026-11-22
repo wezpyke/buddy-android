@@ -36,6 +36,19 @@ final class Prefs {
         sp(c).edit().putBoolean("bg_paired", paired).apply();
     }
 
+    /**
+     * A chat has had Linux tools (a shell) in Buddy's Linux. From then on what's there, Buddy's adb with it, may have
+     * been changed by an agent, so background mode isn't set up on it (see Background.beginSetup). Only clearing
+     * Buddy's storage resets this.
+     */
+    static boolean devShellUsed(Context c) {
+        return sp(c).getBoolean("dev_shell_used", false);
+    }
+
+    static void setDevShellUsed(Context c) {
+        if (!devShellUsed(c)) sp(c).edit().putBoolean("dev_shell_used", true).apply();
+    }
+
     /** The secret the background helper is started with and asks for; generated once per install. */
     static synchronized String backgroundToken(Context c) {
         String t = sp(c).getString("bg_token", null);

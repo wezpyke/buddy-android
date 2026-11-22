@@ -72,8 +72,21 @@ final class Linux {
         if (!staging.renameTo(root)) throw new IOException(c.getString(R.string.linux_move_failed));
     }
 
+    /**
+     * Where Buddy's adb keeps its pairing key: Buddy's own storage, outside Alpine. It shows up at /root/.android only
+     * in Buddy's own adb commands (execAdb), never in an agent's shell: with the key, a shell could reach the phone as
+     * Android's shell user and go around every approval.
+     */
+    static File adbHome(Context c) {
+        return new File(c.getFilesDir(), "linux/adb-home");
+    }
+
     /** The proot command line for running {@code cmd} inside Alpine. */
     static List<String> command(Context c, String... cmd) {
+        return command(c, false, cmd);
+    }
+
+    private static List<String> command(Context c, boolean adb, String... cmd) {
         String lib = c.getApplicationInfo().nativeLibraryDir;
         List<String> a = new ArrayList<>(Arrays.asList(lib + "/libproot.so",
                 "--kill-on-exit", "--link2symlink", "-0",
@@ -86,6 +99,7 @@ final class Linux {
         // the phone's own fonts, for every script and emoji: the background browser shows pages in any language
         // without a big font download (Alpine's Chromium only brings a Latin one)
         if (new File("/system/fonts").isDirectory()) a.addAll(Arrays.asList("-b", "/system/fonts:/usr/share/fonts/android"));
+        if (adb) a.addAll(Arrays.asList("-b", adbHome(c).getAbsolutePath() + ":/root/.android"));
         a.addAll(Arrays.asList("/usr/bin/env", "-i", "HOME=/root", "LANG=C.UTF-8", "TERM=xterm-256color", "COLORTERM=truecolor",
                 "PATH=/root/.local/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"));
         a.addAll(Arrays.asList(cmd));
@@ -93,10 +107,14 @@ final class Linux {
     }
 
     static ProcessBuilder builder(Context c, String... cmd) {
+        return builder(c, false, cmd);
+    }
+
+    private static ProcessBuilder builder(Context c, boolean adb, String... cmd) {
         String lib = c.getApplicationInfo().nativeLibraryDir;
         File tmp = new File(c.getCacheDir(), "proot");
         tmp.mkdirs();
-        ProcessBuilder pb = new ProcessBuilder(command(c, cmd));
+        ProcessBuilder pb = new ProcessBuilder(command(c, adb, cmd));
         pb.environment().put("PROOT_LOADER", lib + "/libproot-loader.so");
         pb.environment().put("PROOT_TMP_DIR", tmp.getAbsolutePath());
         pb.environment().put("LD_LIBRARY_PATH", lib);
@@ -106,7 +124,27 @@ final class Linux {
 
     /** Runs a shell command inside Alpine and returns its output (stdout and stderr), with the exit code. */
     static String exec(Context c, String shell, int timeoutSec) throws Exception {
-        Process p = builder(c, "/bin/sh", "-c", shell).start();
+        return exec(c, false, shell, timeoutSec);
+    }
+
+    /** As exec, with Buddy's adb key at /root/.android (see adbHome). Only for Buddy's own adb commands. */
+    static String execAdb(Context c, String shell, int timeoutSec) throws Exception {
+        File home = adbHome(c);
+        home.mkdirs();
+        File old = new File(root(c), "root/.android");
+        old.mkdirs(); // the bind's mount point
+        // a key from before this change: into Buddy's storage, and out of Alpine
+        for (String n : new String[]{"adbkey", "adbkey.pub"}) {
+            File f = new File(old, n);
+            if (!f.exists()) continue;
+            File to = new File(home, n);
+            if (to.exists() || !f.renameTo(to)) f.delete();
+        }
+        return exec(c, true, shell, timeoutSec);
+    }
+
+    private static String exec(Context c, boolean adb, String shell, int timeoutSec) throws Exception {
+        Process p = builder(c, adb, "/bin/sh", "-c", shell).start();
         p.getOutputStream().close();
         ByteArrayOutputStream out = new ByteArrayOutputStream();
         Thread reader = new Thread(() -> {

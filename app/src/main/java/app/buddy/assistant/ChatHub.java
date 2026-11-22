@@ -1107,9 +1107,17 @@ final class ChatHub {
      * The model to run. OpenCode's own default free model can take over 30 seconds to answer, so without
      * connected providers Buddy uses Big Pickle, which answers in seconds.
      */
-    /** The helper's mode for a chat's run: "1" with Linux tools, "0" without. */
+    /**
+     * The helper's mode for a chat's run: "1" with Linux tools, "0" without. Never with background mode paired: a shell
+     * in Buddy's Linux could use Buddy's adb (or change it) to reach the phone as Android's shell user, around every
+     * approval.
+     */
     private static String devArg(Sessions.Session ses) {
-        return ses.dev ? "1" : "0";
+        if (!ses.dev) return "0";
+        android.content.Context c = BuddyApp.context();
+        if (Prefs.backgroundPaired(c) || Background.settingUp()) return "0";
+        Prefs.setDevShellUsed(c);
+        return "1";
     }
 
     private static String model(Sessions.Session ses) {

@@ -59,6 +59,12 @@ final class Background {
     private Background() {
     }
 
+    /** Setting up is under way: Buddy's adb, with its key, may be running (see ChatHub.devArg). */
+    static boolean settingUp() {
+        Step s = step;
+        return s == Step.INSTALLING || s == Step.WAITING || s == Step.PAIRING || s == Step.STARTING;
+    }
+
     static final class Unavailable extends Exception {
         Unavailable(String why) {
             super(why);
@@ -617,7 +623,7 @@ final class Background {
                 + "adb -s 127.0.0.1:$p shell \"tail -c 1500 " + LOG + "\" 2>&1; break; fi; "
                 + "adb disconnect 127.0.0.1:$p >/dev/null 2>&1; done; adb kill-server >/dev/null 2>&1";
         try {
-            String out = Linux.exec(c, script, 150);
+            String out = Linux.execAdb(c, script, 150);
             Matcher m = Pattern.compile("PORT=(\\d+)").matcher(out);
             if (m.find()) Prefs.setBackgroundAdbPort(c, Integer.parseInt(m.group(1)));
             return out;
@@ -796,6 +802,10 @@ final class Background {
                     set(Step.FAILED, svc.getString(R.string.background_needs_linux));
                     return;
                 }
+                if (Prefs.devShellUsed(svc)) { // an agent's shell may have changed Buddy's Linux, adb with it
+                    set(Step.FAILED, svc.getString(R.string.background_after_dev));
+                    return;
+                }
                 String out = Linux.exec(svc, "command -v adb >/dev/null && echo ADB_OK && exit 0; "
                         + "grep -q '^@edge .*/edge/community' /etc/apk/repositories || "
                         + "echo '@edge " + Mirrors.alpine(svc) + "/edge/community' >>/etc/apk/repositories; "
@@ -836,7 +846,7 @@ final class Background {
                     set(Step.FAILED, svc.getString(R.string.background_no_dialog) + "\n(no pairing port found)");
                     return;
                 }
-                String paired = Linux.exec(svc, ADB + "adb start-server >/dev/null 2>&1; for p in" + tryPorts + "; do "
+                String paired = Linux.execAdb(svc, ADB + "adb start-server >/dev/null 2>&1; for p in" + tryPorts + "; do "
                         + "r=$(timeout 15 adb pair 127.0.0.1:$p " + found[0] + " 2>&1 | tail -2); echo \"$p: $r\"; "
                         + "case \"$r\" in *'Successfully paired'*) break;; esac; done; "
                         + "adb kill-server >/dev/null 2>&1", 150);
@@ -873,9 +883,9 @@ final class Background {
                 call(c, "quit");
             } catch (IOException ignored) {
             }
-            try {
-                Linux.exec(c, "rm -f /root/.android/adbkey /root/.android/adbkey.pub", 30);
-            } catch (Exception ignored) {
+            for (String n : new String[]{"adbkey", "adbkey.pub"}) {
+                new java.io.File(Linux.adbHome(c), n).delete();
+                new java.io.File(Linux.root(c), "root/.android/" + n).delete(); // from before the key moved out
             }
         }).start();
     }

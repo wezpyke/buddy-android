@@ -17,10 +17,11 @@ import java.util.regex.Pattern;
  * own bubble or approval card, so it can't approve for the user.
  */
 final class Guard {
-    /** Words on buttons that send, pay, delete or otherwise can't be taken back, and add-to-cart buttons, so every
-     * agent asks the same way before shopping, in each of Buddy's languages. */
-    private static final Pattern RISKY = Pattern.compile("(?iu)^[^\\p{L}]*(?:(?:proceed|continue|go) to |passer (?:à la|au) |weiter zur |zur )?("
-            + "send|post|publish|share now|tweet|reply all|submit|confirm|pay|pay now|buy|buy now|purchase|"
+    /** Words on buttons that send, pay, delete, approve or otherwise can't be taken back, and add-to-cart buttons, so
+     * every agent asks the same way before shopping, in each of Buddy's languages. Anywhere in a short label, not only
+     * at its start: "Place your order", "Yes, delete", "Complete purchase". */
+    private static final Pattern RISKY = Pattern.compile("(?iu)(?<![\\p{L}])(?:(?:proceed|continue|go) to |passer (?:à la|au) |weiter zur |zur )?("
+            + "approve|accept|agree|allow|authorise|authorize|complete purchase|send|post|publish|share now|tweet|reply all|submit|confirm|pay|pay now|buy|buy now|purchase|"
             + "order|place order|checkout|check out|payment|add to cart|add to basket|add to bag|add to trolley|subscribe|transfer|donate|delete|remove|erase|uninstall|"
             + "unfriend|block|report|unsubscribe|deactivate|factory reset|reset|sign out|log out|logout|call|"
             + "envoyer|envoi|publier|partager maintenant|répondre à tous|valider|confirmer|payer|acheter|commander|"
@@ -296,6 +297,22 @@ final class Guard {
         // the rest follow the first-setup choice: work on its own, or ask first
         return Prefs.autonomousDefault(c) ? new String[]{"trust", c.getString(R.string.guard_why_suggested)}
                 : new String[]{"hard", c.getString(R.string.guard_why_setup)};
+    }
+
+    /**
+     * One of Buddy's built-in sensitive apps (messaging, email, social, calls, stores, Settings and installers, money
+     * apps) that the user hasn't put on Trust: every tap there asks, whatever its label, unless the user listed that
+     * button as never asking. A label can't be relied on: "OK", "Approve" and an icon all pay or send as well.
+     */
+    static boolean lockedDown(android.content.Context c, String pkg) {
+        if (pkg == null) return true;
+        if ("trust".equals(Prefs.appSafety(c, pkg))) return false;
+        if (HARD_BY_DEFAULT.contains(pkg) || NEVER_ALLOWED.matcher(pkg).find() || moneyApp(c, pkg)) return true;
+        try {
+            return c.getPackageManager().getApplicationInfo(pkg, 0).category == android.content.pm.ApplicationInfo.CATEGORY_SOCIAL;
+        } catch (Exception e) {
+            return false;
+        }
     }
 
     private Guard() {
@@ -694,7 +711,7 @@ final class Guard {
     static String riskyText(String label) {
         if (label == null) return null;
         String s = label.trim();
-        // as for a button on the phone: starts with the word and is short
+        // as for a button on the phone: short, with the word in it
         if (s.isEmpty() || s.length() > 30 || s.split("\\s+").length > 4) return null;
         return RISKY.matcher(s).find() ? s : null;
     }
@@ -717,8 +734,8 @@ final class Guard {
         for (CharSequence cs : new CharSequence[]{n.getText(), n.getContentDescription(), n.getTooltipText()}) {
             if (cs == null) continue;
             String s = cs.toString().trim();
-            // a button label ("Send", "Pay now", "Delete chat"): starts with the word and is short, so a chat
-            // preview like "Sarah, the audio call ended" isn't mistaken for a Call button
+            // a button label ("Send", "Pay now", "Place your order"): short, so a chat preview like "Sarah, the
+            // audio call ended" isn't mistaken for a Call button
             if (s.isEmpty() || s.length() > 30 || s.split("\\s+").length > 4) continue;
             if (RISKY.matcher(s).find()) return s;
         }

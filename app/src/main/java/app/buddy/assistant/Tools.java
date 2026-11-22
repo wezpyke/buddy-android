@@ -1878,7 +1878,7 @@ final class Tools {
         String what = "Tap “" + (label == null ? "this" : label) + "”"; // for the agent and the reviewer
         java.util.function.Function<String, String> card = in -> tapCard(label, in); // the same, on the user's card
         boolean userAsks = Guard.listed(svc, "ask", label, pkg);
-        boolean ask = userAsks || Guard.floor(pkg, target) || (hit != null && Guard.floor(str(hit.getPackageName()), hit))
+        boolean ask = userAsks || Guard.lockedDown(svc, pkg) || Guard.floor(pkg, target) || (hit != null && Guard.floor(str(hit.getPackageName()), hit))
                 || (Prefs.guardBuiltin(svc) && (Guard.riskyLabel(target) != null || (hit != null && Guard.riskyLabel(hit) != null)));
         // the run rule covers a button that only sends, and not one the user listed as always asking
         boolean byRule = !userAsks && Guard.sends(svc, target)
@@ -2301,8 +2301,7 @@ final class Tools {
 
     /**
      * add_notification_rule: a notification rule bound to the calling chat (Rules.Rule.chat), added only once the user
-     * approves it on a card. It starts on "ask", as every rule does; countdown and "Don't ask" stay the user's to
-     * switch on in Notification rules.
+     * approves it on a card. It is on "ask", as every rule is (see Rules.Rule.approval).
      */
     private String addRule(JSONObject a) throws Exception {
         String chat = McpServer.CALLER_CHAT.get();

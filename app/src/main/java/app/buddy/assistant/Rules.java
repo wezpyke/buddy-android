@@ -29,8 +29,9 @@ final class Rules {
         /** The agent that runs it (claude, codex, opencode or grok), and its model ("" for the agent's default). */
         String backend = "claude", model = "";
         /**
-         * Before acting: "ask" (approval cards wait for the user), "countdown" (they approve themselves) or "now" (a
-         * message goes without a card). The last two cover sending a message only, after the second check.
+         * Before acting: always "ask" (approval cards wait for the user). "countdown" (cards approved themselves) and
+         * "now" (a message went without a card) are gone: a message someone sends the user could steer the agent, and
+         * then nothing stood between it and a reply. Rules saved with them read as "ask".
          */
         String approval = "ask";
         int seconds = 30;
@@ -59,7 +60,7 @@ final class Rules {
             r.instruction = o.optString("instruction");
             r.backend = o.optString("backend", "claude");
             r.model = o.optString("model", "");
-            r.approval = o.optString("approval", "ask");
+            r.approval = "ask";
             r.seconds = o.optInt("seconds", 30);
             r.limit = o.optInt("limit", 20);
             r.on = o.optBoolean("on", true);
