@@ -206,6 +206,20 @@ public class AppPermissionsActivity extends Screen {
         names.addView(single(text(this, a.label, 14, TEXT)));
         final TextView why = single(text(this, Guard.modeWhy(this, a.pkg, a.label)[1], 11, MUTED));
         names.addView(why);
+        // whether an agent may see this app's screen without asking (see Guard.privateApp); a tap switches it
+        final TextView priv = single(text(this, "", 11, MUTED));
+        final Runnable paintPriv = () -> {
+            boolean on = Guard.privateApp(this, a.pkg);
+            priv.setText(getString(on ? R.string.perms_private_on : R.string.perms_private_off));
+            priv.setTextColor(on ? ACCENT_TEXT : MUTED);
+        };
+        paintPriv.run();
+        priv.setPaddingRelative(0, dp(this, 4), 0, dp(this, 4));
+        priv.setOnClickListener(v -> {
+            Prefs.setAppPrivate(this, a.pkg, !Guard.privateApp(this, a.pkg));
+            paintPriv.run();
+        });
+        names.addView(priv);
         LinearLayout.LayoutParams np = weight1();
         np.leftMargin = np.rightMargin = dp(this, 10);
         r.addView(names, np);

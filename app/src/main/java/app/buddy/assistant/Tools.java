@@ -527,6 +527,10 @@ final class Tools {
         if (step != null) svc.showActivity(step, pictureKey());
         if (ACTIONS.contains(name)) svc.runOnMain(() -> svc.marks().clear()); // the screen is about to change
         if (PhoneTools.NAMES.contains(name)) return phone.call(name, a, ruleRun());
+        if (READS.contains(name)) {
+            String no = privateGate();
+            if (no != null) return text(no);
+        }
         switch (name) {
             case "read_screen": return text(readScreen());
             case "tap": return text(tap(a, false));
@@ -912,6 +916,43 @@ final class Tools {
     /** The calling chat is a notification rule's run (see Triggers.ruleRun). */
     private boolean ruleRun() {
         return Triggers.ruleRun(McpServer.CALLER_CHAT.get());
+    }
+
+    /** The tools whose answer shows what's on the screen. */
+    private static final java.util.Set<String> READS = new java.util.HashSet<>(java.util.Arrays.asList(
+            "read_screen", "screenshot", "find", "collect", "wait_for"));
+
+    /**
+     * A private app on the screen this call reads (see Guard.privateApp): the user approves the agent seeing it, once
+     * per app and run. null when the call may read; otherwise why not.
+     */
+    private String privateGate() throws InterruptedException {
+        String caller = McpServer.CALLER_KEY.get();
+        if (caller == null) caller = Background.OUTSIDE;
+        java.util.LinkedHashSet<String> pkgs = new java.util.LinkedHashSet<>();
+        for (AccessibilityWindowInfo w : windows()) {
+            if (w.getType() != AccessibilityWindowInfo.TYPE_APPLICATION) continue;
+            AccessibilityNodeInfo root = w.getRoot();
+            if (root != null && root.getPackageName() != null) pkgs.add(root.getPackageName().toString());
+        }
+        for (String pkg : pkgs) {
+            if (!Guard.privateApp(svc, pkg) || Guard.mayView(caller, pkg)) continue;
+            String app = appName(pkg);
+            String no = guardAction("Let you see " + app + "'s screen",
+                    in -> svc.getString(R.string.tools_card_view, app), null, false, false, true);
+            if (no != null) return no;
+            Guard.allowView(caller, pkg);
+        }
+        return null;
+    }
+
+    private String appName(String pkg) {
+        try {
+            android.content.pm.PackageManager pm = svc.getPackageManager();
+            return pm.getApplicationLabel(pm.getApplicationInfo(pkg, 0)).toString();
+        } catch (Exception e) {
+            return pkg;
+        }
     }
 
     /** The app's mode for this call: a rule's run gets no Trust (it works for someone else's message). */

@@ -328,6 +328,37 @@ final class Guard {
         }
     }
 
+    /**
+     * A private app: an agent sees its screen (read_screen, screenshot, find, collect, wait_for) only after the user
+     * approved that, once per app and run. Money apps start private; the user can change any app in App permissions.
+     */
+    static boolean privateApp(android.content.Context c, String pkg) {
+        if (pkg == null || BuildInfo.class.getPackage().getName().equals(pkg)) return false;
+        Boolean set = Prefs.appPrivate(c, pkg);
+        return set != null ? set : moneyApp(c, pkg);
+    }
+
+    /**
+     * caller key (a chat, or the outside sessions) + "|" + package → when the user let an agent see it. It lasts until
+     * the chat's run ends, and 30 minutes at most (outside sessions have no run that ends).
+     */
+    private static final java.util.Map<String, Long> SEEN = new java.util.concurrent.ConcurrentHashMap<>();
+    private static final long VIEW_MS = 30 * 60_000L;
+
+    static boolean mayView(String caller, String pkg) {
+        Long at = SEEN.get(caller + "|" + pkg);
+        return at != null && System.currentTimeMillis() - at < VIEW_MS;
+    }
+
+    static void allowView(String caller, String pkg) {
+        SEEN.put(caller + "|" + pkg, System.currentTimeMillis());
+    }
+
+    /** The run ended: what it was let see goes with it. */
+    static void forgetViews(String caller) {
+        SEEN.keySet().removeIf(k -> k.startsWith(caller + "|"));
+    }
+
     private Guard() {
     }
 

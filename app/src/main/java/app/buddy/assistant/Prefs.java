@@ -803,6 +803,16 @@ final class Prefs {
         sp(c).edit().putString("app_safety_" + pkg, mode).apply();
     }
 
+    /** The user's Private choice for an app (see Guard.privateApp), or null when they haven't made one. */
+    static Boolean appPrivate(Context c, String pkg) {
+        String k = "app_private_" + pkg;
+        return sp(c).contains(k) ? sp(c).getBoolean(k, false) : null;
+    }
+
+    static void setAppPrivate(Context c, String pkg, boolean on) {
+        sp(c).edit().putBoolean("app_private_" + pkg, on).apply();
+    }
+
     /** Guard lists as JSON: "allow", "ask", "seen". */
     static String guardList(Context c, String list) {
         return sp(c).getString("guard_" + list, "[]");

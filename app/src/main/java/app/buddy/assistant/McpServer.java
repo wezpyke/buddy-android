@@ -457,6 +457,7 @@ final class McpServer {
                     try {
                         result = handler.callTool(name, args);
                     } catch (Exception e) {
+                        Log.w(TAG, "tool " + name + " failed", e); // "Error: null" alone says nothing of where
                         result = new JSONObject()
                                 .put("content", new JSONArray().put(new JSONObject()
                                         .put("type", "text").put("text", "Error: " + e.getMessage())))

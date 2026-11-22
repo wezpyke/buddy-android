@@ -60,6 +60,40 @@ public class HardeningTest {
         assertFalse("the user's Trust wins", Guard.lockedDown(c, "com.whatsapp"));
     }
 
+    // ------------------------------------------------------------------ private apps
+
+    @Test
+    public void moneyAppsStartPrivateAndTheUserDecides() {
+        assertTrue(Guard.privateApp(c, "uk.co.santander.bank"));
+        assertTrue(Guard.privateApp(c, "com.paypal.android.p2pmobile"));
+        assertFalse(Guard.privateApp(c, "com.example.notes"));
+        assertFalse("Buddy itself", Guard.privateApp(c, "app.buddy.assistant"));
+        assertFalse("no app", Guard.privateApp(c, null));
+        Prefs.setAppPrivate(c, "com.example.notes", true);
+        assertTrue(Guard.privateApp(c, "com.example.notes"));
+        Prefs.setAppPrivate(c, "uk.co.santander.bank", false);
+        assertFalse(Guard.privateApp(c, "uk.co.santander.bank"));
+    }
+
+    @SuppressWarnings("unchecked")
+    @Test
+    public void aViewApprovalIsPerChatAndAppAndEnds() throws Exception {
+        String bank = "uk.co.santander.bank";
+        assertFalse(Guard.mayView("chat1", bank));
+        Guard.allowView("chat1", bank);
+        assertTrue(Guard.mayView("chat1", bank));
+        assertFalse("another chat", Guard.mayView("chat2", bank));
+        assertFalse("another app", Guard.mayView("chat1", "com.whatsapp"));
+        Guard.forgetViews("chat1");
+        assertFalse("the run ended", Guard.mayView("chat1", bank));
+
+        Guard.allowView("outside", bank);
+        Field f = Guard.class.getDeclaredField("SEEN");
+        f.setAccessible(true);
+        ((java.util.Map<String, Long>) f.get(null)).put("outside|" + bank, System.currentTimeMillis() - 31 * 60_000L);
+        assertFalse("30 minutes at most", Guard.mayView("outside", bank));
+    }
+
     // ------------------------------------------------------------------ notification rules
 
     @Test

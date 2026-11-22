@@ -1266,6 +1266,7 @@ final class ChatHub {
      */
     private void runEnded(Sessions.Session ses) {
         Prefs.setBusy(app, ses.id, false);
+        Guard.forgetViews(ses.id); // a private app's screen: asked again next run
         SpeechPause.runEnded();
         StepLog.runEnded(app, ses);
         if (!ses.parent.isEmpty()) { // a sub-agent has one run: its screen closes at once
