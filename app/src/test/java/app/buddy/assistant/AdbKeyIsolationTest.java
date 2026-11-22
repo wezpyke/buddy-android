@@ -22,7 +22,9 @@ import java.nio.file.Files;
 /**
  * Buddy's real Linux.exec and Linux.execAdb, run with a real proot over a real Alpine root filesystem: an agent's shell
  * (exec) never sees background mode's adb key; Buddy's own adb commands (execAdb) do. Needs proot on the PATH and an
- * Alpine minirootfs given as -Pbuddy.alpine=<tar.gz> (and -Pandroid.useAndroidX=true, for Robolectric); skipped without them.
+ * Alpine minirootfs given as -Pbuddy.alpine=<tar.gz> (and -Pandroid.useAndroidX=true, for Robolectric); skipped without them,
+ * unless -Pbuddy.require=true (CI), which makes a missing one a failure. -Pbuddy.proot=<path> picks the proot (default: the
+ * system's); -Pbuddy.proot.loader=<path> its loader, for a build of Buddy's own (third_party/proot) that has one apart.
  */
 @RunWith(RobolectricTestRunner.class)
 @Config(sdk = 35)
@@ -33,18 +35,24 @@ public class AdbKeyIsolationTest {
     @Before
     public void alpine() throws Exception {
         String tgz = System.getProperty("buddy.alpine", "");
-        assumeTrue("no -Dbuddy.alpine", !tgz.isEmpty() && new File(tgz).isFile());
-        assumeTrue("no proot", new File("/usr/bin/proot").canExecute());
+        String bin = System.getProperty("buddy.proot", "");
+        if (bin.isEmpty()) bin = "/usr/bin/proot";
+        String loader = System.getProperty("buddy.proot.loader", "");
+        boolean have = !tgz.isEmpty() && new File(tgz).isFile() && new File(bin).canExecute();
+        if ("true".equals(System.getProperty("buddy.require", ""))) assertTrue("no Alpine or proot: " + tgz + ", " + bin, have);
+        assumeTrue("no Alpine or proot", have);
         c = RuntimeEnvironment.getApplication();
-        // Buddy runs proot from its native libraries: here, the system's proot (its loader is built in)
+        // Buddy runs proot from its native libraries: here, the given proot through a small script
         File lib = new File(c.getCacheDir(), "lib");
         lib.mkdirs();
         File proot = new File(lib, "libproot.so");
-        Files.write(proot.toPath(), ("#!/bin/sh\nunset PROOT_LOADER\n"
-                // a distribution's proot may lack Termux's --kill-on-exit (reaps leftover processes) and --link2symlink (hard links
-                // as symlinks): neither changes what a shell can see
-                + "for a; do shift; case $a in --kill-on-exit|--link2symlink) ;; *) set -- \"$@\" \"$a\";; esac; done\n"
-                + "exec /usr/bin/proot \"$@\"\n").getBytes(StandardCharsets.UTF_8));
+        Files.write(proot.toPath(), ("#!/bin/sh\n"
+                + (loader.isEmpty() ? "unset PROOT_LOADER\n" : "export PROOT_LOADER='" + loader + "'\n")
+                // a distribution's proot may lack Termux's --kill-on-exit (reaps leftover processes) and --link2symlink
+                // (hard links as symlinks): neither changes what a shell can see. Buddy's own has both, and keeps them
+                + "if ! '" + bin + "' --help 2>&1 | grep -q -- --kill-on-exit; then\n"
+                + "for a; do shift; case $a in --kill-on-exit|--link2symlink) ;; *) set -- \"$@\" \"$a\";; esac; done\nfi\n"
+                + "exec '" + bin + "' \"$@\"\n").getBytes(StandardCharsets.UTF_8));
         assertTrue(proot.setExecutable(true));
         c.getApplicationInfo().nativeLibraryDir = lib.getAbsolutePath();
         File root = Linux.root(c);

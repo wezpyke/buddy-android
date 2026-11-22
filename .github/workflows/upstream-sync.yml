@@ -1,0 +1,88 @@
+name: Upstream sync
+
+# Each Monday: merge Buddy's newest main into security-hardening, run the tests, and push only when they pass.
+# A merge conflict, failing tests or a push GitHub refuses (an upstream change to a workflow file, which this
+# workflow's token may not push) opens an issue instead, once, and leaves the branch as it was.
+on:
+  schedule:
+    - cron: "17 5 * * 1" # Mondays 05:17 UTC
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  issues: write
+
+concurrency:
+  group: upstream-sync
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ github.token }}
+      BRANCH: security-hardening
+      UPSTREAM: https://github.com/ghorbelhamdi/buddy-android.git
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: security-hardening
+          fetch-depth: 0
+
+      - name: Merge upstream main
+        id: merge
+        run: |
+          issue() { # title, body: one open issue per title
+            if [ -z "$(gh issue list --state open --search "in:title \"$1\"" --json number -q '.[0].number')" ]; then
+              gh issue create --title "$1" --body "$2"
+            fi
+          }
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git remote add upstream "$UPSTREAM"
+          git fetch -q upstream main
+          if git merge-base --is-ancestor upstream/main HEAD; then
+            echo "Already up to date with upstream $(git rev-parse --short upstream/main)"
+            echo "merged=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          if ! git merge --no-edit upstream/main; then
+            files=$(git diff --name-only --diff-filter=U | paste -sd, - | sed 's/,/, /g')
+            git merge --abort
+            issue "Upstream sync: merge conflict" "Merging upstream \`$(git rev-parse --short upstream/main)\` into \`$BRANCH\` conflicts in: $files. Merge it by hand: \`git fetch $UPSTREAM main && git merge FETCH_HEAD\`."
+            exit 1
+          fi
+          git submodule update --init --recursive
+          echo "merged=true" >> "$GITHUB_OUTPUT"
+          echo "upstream=$(git rev-parse --short upstream/main)" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/setup-java@d1374f8ac74474200d16ef8ecee22c7ae7a51880 # v6
+        if: steps.merge.outputs.merged == 'true'
+        with:
+          distribution: temurin
+          java-version: "21"
+
+      - uses: gradle/actions/setup-gradle@8da46b539cd8fe6ab27ca75128919a18d757604c # v6
+        if: steps.merge.outputs.merged == 'true'
+
+      - name: Test the merge
+        id: tests
+        if: steps.merge.outputs.merged == 'true'
+        run: |
+          bash linux/test/run.sh
+          .github/scripts/unit-tests.sh
+
+      - name: Push
+        if: steps.merge.outputs.merged == 'true'
+        run: |
+          if ! git push origin "HEAD:$BRANCH"; then
+            gh issue create --title "Upstream sync: push refused" --body "Upstream \`${{ steps.merge.outputs.upstream }}\` merged and passed the tests, but the push was refused (usually an upstream change to a workflow file, which this workflow's token can't push). Merge it by hand: \`git fetch $UPSTREAM main && git merge FETCH_HEAD && git push\`."
+            exit 1
+          fi
+
+      - name: Report failing tests
+        if: failure() && steps.tests.outcome == 'failure'
+        run: |
+          if [ -z "$(gh issue list --state open --search 'in:title "Upstream sync: tests fail"' --json number -q '.[0].number')" ]; then
+            gh issue create --title "Upstream sync: tests fail" --body "Upstream \`${{ steps.merge.outputs.upstream }}\` merges cleanly into \`$BRANCH\` but the tests fail, so nothing was pushed. Run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+          fi

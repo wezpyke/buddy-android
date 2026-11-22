@@ -74,7 +74,11 @@ android {
     // JVM tests (Robolectric): test-only, nothing of it goes into the APK
     testOptions {
         unitTests.isIncludeAndroidResources = true
-        unitTests.all { it.systemProperty("buddy.alpine", project.findProperty("buddy.alpine")?.toString() ?: "") }
+        unitTests.all { t ->
+            for (k in listOf("buddy.alpine", "buddy.proot", "buddy.proot.loader", "buddy.require")) {
+                t.systemProperty(k, project.findProperty(k)?.toString() ?: "")
+            }
+        }
     }
 }
 
