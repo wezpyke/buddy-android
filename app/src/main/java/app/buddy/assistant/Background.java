@@ -42,7 +42,7 @@ final class Background {
     /** Where the helper's own output goes (the shell user's folder): read back when it doesn't start. */
     private static final String LOG = "/data/local/tmp/buddy-helper.log";
     /** Buddy's adb keeps a server of its own: another app's (Termux's) on the usual port has other keys. */
-    private static final String ADB = "export HOME=/root ANDROID_ADB_SERVER_PORT=5138; ";
+    private static final String ADB = "export HOME=/root ANDROID_ADB_SERVER_PORT=5138 PATH=/usr/bin:/bin; "; // Alpine's own adb
     private static final String SECURE = "android.permission.WRITE_SECURE_SETTINGS";
 
     /** Set up, step by step; the screen shows it. */

@@ -245,7 +245,9 @@ final class BrowserTools {
         boolean approved = false;
         String risky = riskyTap(t, before == null ? "" : before[0]);
         boolean allow = Guard.listed(svc, "allow", label, null); // the user said: never ask for this one
-        if (!allow && (Guard.listed(svc, "ask", label, null) || (Prefs.guardBuiltin(svc) && risky != null))) {
+        // A page can be any shop or bank, signed in: only a plain link (it just goes to another page) goes without
+        // asking; a button, a field, a script's link ("#", "javascript:") or anything else asks, whatever its words
+        if (!allow && (Guard.listed(svc, "ask", label, null) || !plainLink(t) || (Prefs.guardBuiltin(svc) && risky != null))) {
             String name = label.isEmpty() ? risky : label;
             String blocked = approve("Tap “" + name + "”", svc.getString(R.string.browser_card_tap, name, host),
                     t.optString("draft", ""), Guard.sendsText(name));
@@ -312,6 +314,12 @@ final class BrowserTools {
         return r;
     }
 
+    /** A link that only goes to another page (a real href, not "#" or a script): what a click may do without asking. */
+    static boolean plainLink(JSONObject t) {
+        String href = t.optString("href", "").trim().toLowerCase(Locale.ROOT);
+        return "link".equals(t.optString("role")) && !href.isEmpty() && !href.startsWith("#") && !href.startsWith("javascript:");
+    }
+
     private String type(String key, int ref, String text, boolean append, boolean submit) throws Exception {
         JSONObject f = (JSONObject) Browser.eval(key, "__buddy.focus(" + ref + ", " + append + ")");
         if (f.optBoolean("missing")) return stale(ref);
@@ -335,9 +343,8 @@ final class BrowserTools {
                 + (f.optString("label").isEmpty() ? "" : " “" + f.optString("label") + "”") + ".";
         if (!submit) return result;
         // Enter in a search box only searches; in a message box or a form sent by a risky button it sends
-        String sendLabel = f.optString("submitLabel", "");
-        boolean risky = !f.optBoolean("search") && (f.optBoolean("multiline") || Guard.riskyText(sendLabel) != null);
-        if (risky && Prefs.guardBuiltin(svc)) {
+        boolean risky = !f.optBoolean("search"); // Enter sends whatever form it's in: only a search box's goes without asking
+        if (risky) {
             String blocked = approve("Press Enter to send", svc.getString(R.string.browser_card_enter, host(key)), text, true);
             if (blocked != null) return result + " Not sent: " + blocked;
         }

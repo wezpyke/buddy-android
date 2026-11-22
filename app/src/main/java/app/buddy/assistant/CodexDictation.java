@@ -250,6 +250,7 @@ final class CodexDictation {
         if (server != null) server.destroy();
         threadId = null;
         appContext = c.getApplicationContext();
+        Background.requireShells(c); // Codex's app-server can run commands: not beside background mode
         // Buddy's phone tools are only given to chats (on their command line), never here; no app connectors either
         Linux.exec(c, "mkdir -p " + DIR, 30);
         Process p = Linux.builder(c, "/bin/sh", "-c", "cd " + DIR + " && exec codex app-server -c features.apps=false 2>" + DIR + "/server.log").start();

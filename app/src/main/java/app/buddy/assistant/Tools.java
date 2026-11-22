@@ -957,6 +957,13 @@ final class Tools {
         return null;
     }
 
+    /** A window of a private app the calling agent hasn't been let see (see privateGate): its text is left out. */
+    private boolean unseen(AccessibilityNodeInfo root) {
+        String pkg = str(root.getPackageName());
+        String caller = McpServer.CALLER_KEY.get();
+        return Guard.privateApp(svc, pkg) && !Guard.mayView(caller == null ? Background.OUTSIDE : caller, pkg);
+    }
+
     private String appName(String pkg) {
         try {
             android.content.pm.PackageManager pm = svc.getPackageManager();
@@ -1433,6 +1440,7 @@ final class Tools {
             if (w.getType() != AccessibilityWindowInfo.TYPE_APPLICATION && w.getType() != AccessibilityWindowInfo.TYPE_SYSTEM) continue;
             AccessibilityNodeInfo root = w.getRoot();
             if (root == null || svc.getPackageName().contentEquals(String.valueOf(root.getPackageName()))) continue;
+            if (unseen(root)) continue; // a private app the user hasn't let this agent see (it may have opened meanwhile)
             texts(root, out);
         }
         return out;
@@ -1456,6 +1464,7 @@ final class Tools {
             if (w.getType() != AccessibilityWindowInfo.TYPE_APPLICATION && w.getType() != AccessibilityWindowInfo.TYPE_SYSTEM) continue;
             AccessibilityNodeInfo root = w.getRoot();
             if (root == null || svc.getPackageName().contentEquals(String.valueOf(root.getPackageName()))) continue;
+            if (unseen(root)) continue; // a private app the user hasn't let this agent see (it may have opened meanwhile)
             findIn(root, want, best);
             if (best[0] != null) return best[0];
         }
@@ -2272,6 +2281,7 @@ final class Tools {
         // that leaves the view), however far it moves inside it: it gets every check a tap gets
         if (xy.length >= 4) {
             AccessibilityNodeInfo start = Guard.nodeAt(windows, xy[0], xy[1]);
+            if (start == null) return guard(null, null); // nothing readable there: a tap's rules (it asks where it must)
             for (int i = 0; start != null && !start.isClickable() && i < 8; i++) start = start.getParent();
             if (start != null && !start.isScrollable()) {
                 Rect b = new Rect();

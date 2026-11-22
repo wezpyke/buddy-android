@@ -66,6 +66,8 @@ jobs:
 
       - uses: gradle/actions/setup-gradle@8da46b539cd8fe6ab27ca75128919a18d757604c # v6
         if: steps.merge.outputs.merged == 'true'
+        with:
+          cache-read-only: true # upstream's unreviewed code runs here: it mustn't leave anything a later build restores
 
       - name: Test the merge
         if: steps.merge.outputs.merged == 'true'
