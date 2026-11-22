@@ -342,14 +342,34 @@ final class Guard {
         }
     }
 
+    /** Messaging, email, calling and contacts apps: private until the user says otherwise (see privateApp). */
+    private static final java.util.Set<String> PRIVATE_BY_DEFAULT = new java.util.HashSet<>(java.util.Arrays.asList(
+            "com.whatsapp", "com.whatsapp.w4b", "com.google.android.apps.messaging", "com.samsung.android.messaging",
+            "com.android.mms", "org.telegram.messenger", "org.thoughtcrime.securesms", "com.facebook.orca",
+            "com.viber.voip", "com.discord", "com.Slack", "com.microsoft.teams", "com.tencent.mm", "jp.naver.line.android",
+            "com.google.android.gm", "com.microsoft.office.outlook", "com.yahoo.mobile.client.android.mail",
+            "ch.protonmail.android", "com.google.android.dialer", "com.android.dialer", "com.samsung.android.dialer",
+            "com.oneplus.dialer", "com.google.android.contacts", "com.android.contacts", "com.samsung.android.app.contacts"));
+    /** The same kinds of app by package or name, for the ones not listed (a maker's own Messages, a mail app). */
+    private static final Pattern PRIVATE_NAME = Pattern.compile("(?i)(mail|messag|sms|mms|dialer|contacts)");
+
     /**
      * A private app: an agent sees its screen (read_screen, screenshot, find, collect, wait_for) only after the user
-     * approved that, once per app and run. Money apps start private; the user can change any app in App permissions.
+     * approved that, once per app and run. Money, messaging, email, calling and contacts apps start private; the user
+     * can change any app in App permissions (Screen private / Screen readable).
      */
     static boolean privateApp(android.content.Context c, String pkg) {
         if (pkg == null || BuildInfo.class.getPackage().getName().equals(pkg)) return false;
         Boolean set = Prefs.appPrivate(c, pkg);
-        return set != null ? set : moneyApp(c, pkg);
+        if (set != null) return set;
+        if (PRIVATE_BY_DEFAULT.contains(pkg) || PRIVATE_NAME.matcher(pkg).find() || moneyApp(c, pkg)) return true;
+        try {
+            android.content.pm.PackageManager pm = c.getPackageManager();
+            CharSequence label = pm.getApplicationLabel(pm.getApplicationInfo(pkg, 0));
+            return label != null && PRIVATE_NAME.matcher(label).find();
+        } catch (Exception e) {
+            return false;
+        }
     }
 
     /**

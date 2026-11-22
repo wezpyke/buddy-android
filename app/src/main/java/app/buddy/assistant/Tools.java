@@ -961,7 +961,7 @@ final class Tools {
             // a card of its own, every time: an approval the agent got for something else never covers it
             String answer = svc.askConfirm(svc.getString(R.string.tools_card_view, app));
             if (!answer.startsWith("APPROVED")) {
-                return "BLOCKED by Buddy's safety rule: the user did not let you see " + app + "'s screen. Don't retry "
+                return "BLOCKED by Buddy's safety rule: the user did not let you see the " + app + " screen. Don't retry "
                         + "it; ask the user what they want.";
             }
             Guard.allowView(caller, pkg);

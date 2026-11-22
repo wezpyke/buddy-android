@@ -145,6 +145,13 @@ public class HardeningTest {
         assertTrue(Guard.privateApp(c, "uk.co.santander.bank"));
         assertTrue(Guard.privateApp(c, "com.paypal.android.p2pmobile"));
         assertFalse(Guard.privateApp(c, "com.example.notes"));
+        for (String p : new String[]{"com.whatsapp", "com.google.android.gm", "com.google.android.apps.messaging",
+                "org.thoughtcrime.securesms", "com.microsoft.office.outlook", "com.google.android.dialer",
+                "com.google.android.contacts", "com.example.mailapp", "com.maker.mms"}) {
+            assertTrue("private by default: " + p, Guard.privateApp(c, p));
+        }
+        Prefs.setAppPrivate(c, "com.whatsapp", false);
+        assertFalse("the user's choice wins", Guard.privateApp(c, "com.whatsapp"));
         assertFalse("Buddy itself", Guard.privateApp(c, "app.buddy.assistant"));
         assertFalse("no app", Guard.privateApp(c, null));
         Prefs.setAppPrivate(c, "com.example.notes", true);
