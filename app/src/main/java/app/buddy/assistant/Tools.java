@@ -1304,13 +1304,7 @@ final class Tools {
             return;
         }
         CharSequence text = n.getText();
-        CharSequence desc = n.getContentDescription();
-        // the status bar names each notification's icon with its title ("Bank notification: £50 received"): only
-        // which app it's from is kept, as a private app's text is no one's to read without the user's OK
-        if (desc != null && SYSTEM_UI.equals(str(n.getPackageName()))) {
-            int colon = desc.toString().indexOf(": ");
-            if (colon > 0) desc = desc.subSequence(0, colon);
-        }
+        CharSequence desc = desc(n);
         CharSequence error = n.getError(), tooltip = n.getTooltipText(), pane = n.getPaneTitle();
         boolean interesting = !empty(text) || !empty(desc) || n.isClickable() || n.isEditable()
                 || n.isScrollable() || n.isCheckable() || n.isLongClickable()
@@ -1488,10 +1482,24 @@ final class Tools {
         return out;
     }
 
+    /**
+     * A node's description, as every reader shows it. The status bar names each notification's icon with its title
+     * ("Bank notification: £50 received"): only which app it's from is kept, as a private app's text is no one's to
+     * read without the user's OK.
+     */
+    private static CharSequence desc(AccessibilityNodeInfo n) {
+        CharSequence d = n.getContentDescription();
+        if (d != null && SYSTEM_UI.equals(str(n.getPackageName()))) {
+            int colon = d.toString().indexOf(": ");
+            if (colon > 0) d = d.subSequence(0, colon);
+        }
+        return d;
+    }
+
     private void texts(AccessibilityNodeInfo n, List<String> out) {
         if (n == null || out.size() > 2000) return;
         if (!n.isVisibleToUser()) return;
-        CharSequence t = n.getText(), d = n.getContentDescription();
+        CharSequence t = n.getText(), d = desc(n);
         if (!empty(t)) out.add(t.toString().trim());
         else if (!empty(d)) out.add(d.toString().trim());
         for (int i = 0; i < n.getChildCount(); i++) texts(n.getChild(i), out);
@@ -1515,7 +1523,7 @@ final class Tools {
 
     private void findIn(AccessibilityNodeInfo n, String want, AccessibilityNodeInfo[] best) {
         if (n == null || best[0] != null || !n.isVisibleToUser()) return;
-        for (CharSequence c : new CharSequence[]{n.getText(), n.getContentDescription(),
+        for (CharSequence c : new CharSequence[]{n.getText(), desc(n),
                 n.isEditable() ? n.getHintText() : null}) {
             if (empty(c)) continue;
             String v = c.toString().trim().toLowerCase(Locale.ROOT);
@@ -1757,7 +1765,7 @@ final class Tools {
                 Rect r = new Rect();
                 n.getBoundsInScreen(r);
                 return "FOUND after " + i + (i == 1 ? " scroll" : " scrolls") + ": \"" + clip(n.getText() != null ? n.getText()
-                        : n.getContentDescription() != null ? n.getContentDescription() : q) + "\" at " + r.centerX() + ","
+                        : desc(n) != null ? desc(n) : q) + "\" at " + r.centerX() + ","
                         + r.centerY() + ". Call read_screen to act on it.";
             }
             String now = String.join("\n", visibleTexts());
@@ -1951,7 +1959,7 @@ final class Tools {
         b.append(r.left).append(',').append(r.top).append(',').append(r.right).append(',').append(r.bottom)
                 .append(n.isChecked() ? " c" : "").append(n.isSelected() ? " s" : "").append(n.isFocused() ? " f" : "")
                 .append(n.isEnabled() ? "" : " d").append(' ')
-                .append(n.getText()).append('|').append(n.getContentDescription()).append('|').append(n.getStateDescription()).append('\n');
+                .append(n.getText()).append('|').append(desc(n)).append('|').append(n.getStateDescription()).append('\n');
         for (int i = 0; i < n.getChildCount(); i++) print(n.getChild(i), b, r);
     }
 
