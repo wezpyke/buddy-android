@@ -2095,7 +2095,7 @@
     <!-- %1$s = what went wrong (may be in English). -->
     <string name="background_failed">It didn\'t work: %1$s</string>
     <string name="background_needs_linux">Background mode needs Buddy\'s Linux. Install an agent first.</string>
-    <string name="background_after_dev">A chat with Linux tools has had a shell in Buddy\'s Linux, so it may have changed the adb background mode would use. To set up background mode, clear Buddy\'s storage (App info → Storage) and set up again without Linux tools. With background mode on, chats don\'t get Linux tools.</string>
+    <string name="background_after_dev">a chat has had Linux tools, which may have changed Buddy\'s Linux. To set up background mode, clear Buddy\'s storage (App info → Storage). While it\'s on, chats don\'t get Linux tools.</string>
     <!-- "Developer options", "About device" and "Build number" are Android's own names: use the ones this language's Android shows. -->
     <string name="background_needs_dev">Turn on Developer options first: Settings → About device → tap Build number 7 times.</string>
     <string name="background_needs_service">Turn on Buddy\'s accessibility service first.</string>

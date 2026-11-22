@@ -376,10 +376,8 @@ public class RulesActivity extends Screen {
     private void renderApproval() {
         approvalSlot.removeAllViews();
         LinearLayout box = column(this);
-        box.addView(segmented(this, new String[][]{{"ask", getString(R.string.rules_approval_ask)}}, draft.approval, false, v -> {
-            draft.approval = v;
-            renderApproval();
-        }), full());
+        // one choice only (see Rules.Rule.approval): said, not offered as a switch
+        box.addView(text(this, getString(R.string.rules_approval_ask), 15, TEXT), gap(0));
         if (draft.countdown()) {
             String[][] lengths = new String[Rules.SECONDS.length][];
             for (int i = 0; i < lengths.length; i++) {

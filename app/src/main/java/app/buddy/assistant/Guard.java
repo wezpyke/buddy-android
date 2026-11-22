@@ -244,16 +244,29 @@ final class Guard {
             String l = shortLabel(cur);
             if (l != null) return l;
             if (cur.isClickable()) {
-                for (int c = 0; c < Math.min(cur.getChildCount(), 6); c++) {
-                    AccessibilityNodeInfo ch = cur.getChild(c);
-                    String h = ch == null ? null : shortLabel(ch);
-                    if (h != null) return h;
-                }
+                String h = firstText(cur, 3); // a row's title sits a level or two down (Settings: icon, then title)
+                if (h != null) return h;
                 String id = cur.getViewIdResourceName();
                 if (id != null) return id.substring(id.lastIndexOf('/') + 1).replace('_', ' ');
                 break;
             }
             cur = cur.getParent();
+        }
+        return null;
+    }
+
+    /** The first short label among n's children, then theirs, depth levels down. */
+    private static String firstText(AccessibilityNodeInfo n, int depth) {
+        if (depth == 0) return null;
+        for (int c = 0; c < Math.min(n.getChildCount(), 6); c++) {
+            AccessibilityNodeInfo ch = n.getChild(c);
+            String h = ch == null ? null : shortLabel(ch);
+            if (h != null) return h;
+        }
+        for (int c = 0; c < Math.min(n.getChildCount(), 6); c++) {
+            AccessibilityNodeInfo ch = n.getChild(c);
+            String h = ch == null ? null : firstText(ch, depth - 1);
+            if (h != null) return h;
         }
         return null;
     }
