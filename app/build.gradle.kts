@@ -70,4 +70,15 @@ android {
     buildFeatures {
         buildConfig = false
     }
+
+    // JVM tests (Robolectric): test-only, nothing of it goes into the APK
+    testOptions {
+        unitTests.isIncludeAndroidResources = true
+        unitTests.all { it.systemProperty("buddy.alpine", project.findProperty("buddy.alpine")?.toString() ?: "") }
+    }
+}
+
+dependencies {
+    testImplementation("junit:junit:4.13.2")
+    testImplementation("org.robolectric:robolectric:4.18.1")
 }
