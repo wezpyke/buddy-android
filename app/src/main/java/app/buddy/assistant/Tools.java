@@ -982,7 +982,10 @@ final class Tools {
     private static final String SHADE = ":notifications";
     private static final String SYSTEM_UI = "com.android.systemui";
 
-    /** The notification shade or lock screen is up: a System UI window over half the screen (the status bar is a strip). */
+    /**
+     * Notifications may be on show: a System UI window more than a strip (the status and navigation bars are strips),
+     * which is the shade, half pulled or full, a heads-up notification, the lock screen or Quick Settings.
+     */
     private boolean shadeOpen() {
         for (AccessibilityWindowInfo w : windows()) {
             AccessibilityNodeInfo root = w.getRoot();
@@ -994,7 +997,7 @@ final class Tools {
     private boolean big(AccessibilityNodeInfo root) {
         Rect r = new Rect();
         root.getBoundsInScreen(r);
-        return r.height() > svc.getResources().getDisplayMetrics().heightPixels / 2;
+        return r.height() > svc.getResources().getDisplayMetrics().heightPixels / 16;
     }
 
     private String appName(String pkg) {
@@ -1302,6 +1305,12 @@ final class Tools {
         }
         CharSequence text = n.getText();
         CharSequence desc = n.getContentDescription();
+        // the status bar names each notification's icon with its title ("Bank notification: £50 received"): only
+        // which app it's from is kept, as a private app's text is no one's to read without the user's OK
+        if (desc != null && SYSTEM_UI.equals(str(n.getPackageName()))) {
+            int colon = desc.toString().indexOf(": ");
+            if (colon > 0) desc = desc.subSequence(0, colon);
+        }
         CharSequence error = n.getError(), tooltip = n.getTooltipText(), pane = n.getPaneTitle();
         boolean interesting = !empty(text) || !empty(desc) || n.isClickable() || n.isEditable()
                 || n.isScrollable() || n.isCheckable() || n.isLongClickable()
@@ -1963,7 +1972,7 @@ final class Tools {
             // locked-down app, or one Buddy can't tell, that is no reason to let the tap through
             String front = frontPkg();
             if (front != null && !Guard.lockedDown(svc, front)) return null;
-            return guardAction("Tap a spot Buddy can't read", in -> tapCard(null, in), null, false, false, true);
+            return guardAction("Tap a spot Buddy can't read", in -> tapCard(null, in), null, false, false, true, true);
         }
         String pkg = str(target.getPackageName());
         firstUse(pkg);
@@ -2199,7 +2208,8 @@ final class Tools {
                     str(field.getPackageName()), web || Guard.browser(svc, field.getPackageName()));
             boolean locked = Guard.lockedDown(svc, str(target.getPackageName()));
             String blocked = search ? null
-                    : "hard".equals(mode) || locked ? guardAction("Press Enter to send", card, text, send, byRule.getAsBoolean())
+                    : "hard".equals(mode) || locked ? guardAction("Press Enter to send", card, text, send, byRule.getAsBoolean(),
+                            false, locked && (!send || text == null || text.trim().isEmpty()))
                     : "smart".equals(mode) ? review("Press Enter to send", card, target, text, byRule) : null;
             if (blocked != null) return result + " Not sent: " + blocked;
             Thread.sleep(150);

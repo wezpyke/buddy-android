@@ -538,9 +538,16 @@ final class Guard {
         if (otherRisk && approvedSendOnly && approvedAt != 0) return false;
         if (approvedAt == 0 || !java.util.Objects.equals(approvedFor, who())) return false;
         boolean ok = System.currentTimeMillis() - approvedAt < APPROVAL_USE_MS && (send || !approvedAuto)
-                && (content == null || approvedText != null && plain(approvedText).contains(plain(content)));
+                && (content == null || approvedText != null && words(plain(approvedText), plain(content)));
         approvedAt = 0;
         return ok;
+    }
+
+    /** The text in what was approved, as whole words ("ok" is not in "Look at my bookings"). */
+    static boolean words(String approved, String text) {
+        if (text.isEmpty()) return false;
+        return java.util.regex.Pattern.compile("(?<![\\p{L}\\p{N}])" + java.util.regex.Pattern.quote(text) + "(?![\\p{L}\\p{N}])")
+                .matcher(approved).find();
     }
 
     /** For comparing what was approved with what's sent: case, spacing and quote styles don't matter. */

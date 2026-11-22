@@ -89,6 +89,15 @@ public class HardeningTest {
         assertFalse(Guard.lockedDown(c, "com.ebay.mobile"));
     }
 
+    @Test
+    public void anApprovedMessageCoversOnlyItsOwnWords() {
+        assertTrue(Guard.words("send “ok” to sam", "ok"));
+        assertTrue(Guard.words("reply: running 10 minutes late", "running 10 minutes late"));
+        assertFalse(Guard.words("look at my bookings", "ok"));
+        assertFalse(Guard.words("pay 100", "10"));
+        assertFalse(Guard.words("anything", ""));
+    }
+
     // ------------------------------------------------------------------ shells and background mode
 
     private static void stepTo(String name) throws Exception {
