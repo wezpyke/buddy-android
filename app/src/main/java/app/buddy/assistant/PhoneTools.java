@@ -406,6 +406,10 @@ final class PhoneTools {
                 b.append("(hidden by Android: it may hold a one-time code)\n");
                 continue;
             }
+            if (Guard.privateApp(svc, s.getPackageName())) { // as its screen (Tools.privateGate), but no card here
+                b.append("(a private app: its content isn't shown; ask the user, or open the app and read its screen)\n");
+                continue;
+            }
             b.append(note.who());
             if (!note.messages.isEmpty()) {
                 int from = Math.max(0, note.messages.size() - 3);

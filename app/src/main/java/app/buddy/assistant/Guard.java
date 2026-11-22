@@ -307,6 +307,10 @@ final class Guard {
             }
         } catch (Exception ignored) {
         }
+        // shops and browsers (any shop or bank) never start on Trust either, whatever the first-setup choice
+        if (SHOP_NAME.matcher(pkg).find() || (label != null && SHOP_NAME.matcher(label).find()) || browser(c, pkg)) {
+            return new String[]{"hard", c.getString(R.string.guard_why_category)};
+        }
         // the rest follow the first-setup choice: work on its own, or ask first
         return Prefs.autonomousDefault(c) ? new String[]{"trust", c.getString(R.string.guard_why_suggested)}
                 : new String[]{"hard", c.getString(R.string.guard_why_setup)};

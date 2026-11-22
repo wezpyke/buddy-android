@@ -1113,11 +1113,7 @@ final class ChatHub {
      * approval.
      */
     private static String devArg(Sessions.Session ses) {
-        if (!ses.dev) return "0";
-        android.content.Context c = BuddyApp.context();
-        if (Prefs.backgroundPaired(c) || Background.settingUp()) return "0";
-        Prefs.setDevShellUsed(c);
-        return "1";
+        return ses.dev && Background.shellsAllowed(BuddyApp.context()) ? "1" : "0";
     }
 
     private static String model(Sessions.Session ses) {

@@ -43,7 +43,8 @@ final class Backup {
     private static final java.util.Set<String> SAFETY = new java.util.HashSet<>(java.util.Arrays.asList(
             "bg_shell", "bg_shell_ask", "agents_tap_buddy", "dev", "autonomous_default", "guard_builtin", "guard_allow",
             "ssh_server", "remote_session", "codex_remote", "mcp_servers", "ask_new_apps", "tailnet_tools", "outside_background",
-            "sms_codes")); // (whether sms_list shows codes in messages)
+            "sms_codes", // (whether sms_list shows codes in messages)
+            "dev_shell_used")); // (a shell has been in Buddy's Linux: background mode isn't set up on it)
 
     private Backup() {
     }
@@ -286,7 +287,9 @@ final class Backup {
                 // where Buddy's Linux downloads from, where an agent's requests go, and who reviews its steps
                 || k.startsWith("mirror") || k.startsWith("api_base_") || k.startsWith("reviewer")
                 // which phone tools agents get (Settings → Tools and connections → Tools)
-                || k.startsWith("tool_on:");
+                || k.startsWith("tool_on:")
+                // which apps' screens an agent sees only after asking (Guard.privateApp)
+                || k.startsWith("app_private_");
     }
 
     /** An app's mode by how much it asks: none or Trust 0, Smart 1, Hard 2. */

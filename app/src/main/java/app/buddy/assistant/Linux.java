@@ -133,13 +133,9 @@ final class Linux {
         home.mkdirs();
         File old = new File(root(c), "root/.android");
         old.mkdirs(); // the bind's mount point
-        // a key from before this change: into Buddy's storage, and out of Alpine
-        for (String n : new String[]{"adbkey", "adbkey.pub"}) {
-            File f = new File(old, n);
-            if (!f.exists()) continue;
-            File to = new File(home, n);
-            if (to.exists() || !f.renameTo(to)) f.delete();
-        }
+        // a key from before it moved here was where any shell could copy it: never used again (Background.start
+        // unpairs then, and setting up again makes a new one here)
+        for (String n : new String[]{"adbkey", "adbkey.pub"}) new File(old, n).delete();
         return exec(c, true, shell, timeoutSec);
     }
 

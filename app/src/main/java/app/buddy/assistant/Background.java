@@ -65,6 +65,33 @@ final class Background {
         return s == Step.INSTALLING || s == Step.WAITING || s == Step.PAIRING || s == Step.STARTING;
     }
 
+    private static final Object SHELLS = new Object();
+
+    /**
+     * May a shell start in Buddy's Linux (a chat's Linux tools, the terminal, Remote Control, Codex's remote, the SSH
+     * server)? Never with background mode paired or being set up: a shell there could use Buddy's adb, or change it,
+     * to reach the phone as Android's shell user around every approval. When it may, Buddy's Linux is marked as having
+     * had one, and background mode isn't set up on it (beginSetup). Under one lock with that check.
+     */
+    static boolean shellsAllowed(Context c) {
+        synchronized (SHELLS) {
+            if (Prefs.backgroundPaired(c) || settingUp()) return false;
+            Prefs.setDevShellUsed(c);
+            return true;
+        }
+    }
+
+    /** A chat set to Linux tools: from before shells were marked (an update from an older Buddy), it may have had one. */
+    private static boolean hadLinuxTools(Context c) {
+        for (Sessions.Session s : new java.util.ArrayList<>(ChatHub.get(c).sessions.all)) if (s.dev) return true;
+        return false;
+    }
+
+    /** shellsAllowed, or the reason it isn't, for a service that starts one. */
+    static void requireShells(Context c) throws IOException {
+        if (!shellsAllowed(c)) throw new IOException(c.getString(R.string.shells_off_background));
+    }
+
     static final class Unavailable extends Exception {
         Unavailable(String why) {
             super(why);
@@ -507,6 +534,12 @@ final class Background {
             if (alive(c)) return null;
             if (!setUp(c)) return "background mode isn't set up (Settings → Background mode)";
             if (!Linux.installed(c)) return "background mode needs Buddy's Linux, which isn't installed";
+            // paired before the key moved out of Buddy's Linux: any shell there could have copied it, so it goes, and
+            // background mode is set up again with a new one
+            if (new java.io.File(Linux.root(c), "root/.android/adbkey").exists()) {
+                remove(c);
+                return c.getString(R.string.background_repair);
+            }
             int known = Prefs.backgroundAdbPort(c);
             if (known > 0 && listening(known)) { // the port it had last time, or the one Settings just showed
                 launch(c, Collections.singletonList(known));
@@ -606,9 +639,22 @@ final class Background {
         for (int p : ports) list.append(' ').append(p);
         // an old helper goes first. The pattern is anchored: unanchored it also matches the shell that runs this very
         // line (which names the helper further on), and killed it before the new helper started
-        String helper = "pkill -f '^app_process.*assistant.Shell'; CLASSPATH=" + c.getPackageCodePath()
-                + " setsid app_process / " + Shell.class.getName() + " " + PORT + " " + Prefs.backgroundToken(c)
-                + " >" + LOG + " 2>&1 </dev/null &";
+        // The helper's secret goes in its environment (readable only by the shell user), through a file adb reads
+        // as its input: on no command line here or on the phone, where another process of Buddy's user could read it
+        String helper = "pkill -f '^app_process.*assistant.Shell'\nBUDDY_TOKEN=" + Prefs.backgroundToken(c)
+                + " CLASSPATH=" + c.getPackageCodePath() + " setsid app_process / " + Shell.class.getName() + " " + PORT
+                + " >" + LOG + " 2>&1 </dev/null &\nexit\n";
+        java.io.File cmd = new java.io.File(Linux.adbHome(c), "helper.sh"); // at /root/.android/ in execAdb only
+        try {
+            Linux.adbHome(c).mkdirs();
+            try (java.io.FileOutputStream o = new java.io.FileOutputStream(cmd)) {
+                o.write(helper.getBytes(java.nio.charset.StandardCharsets.UTF_8));
+            }
+            cmd.setReadable(false, false);
+            cmd.setReadable(true, true);
+        } catch (java.io.IOException e) {
+            return "couldn't write the helper's start: " + e.getMessage();
+        }
         // the port Wireless debugging announces on the Wi-Fi first (adb's own discovery): it moves now and then, and a
         // scan can miss it while finding other apps' ports, which adb only calls "offline"
         String script = ADB + "adb start-server >/dev/null 2>&1; mp=''; for i in 1 2 3 4; do "
@@ -619,7 +665,7 @@ final class Background {
                 + "echo \"TRIED $p: $r / $s\" | tr '\\n' ' '; echo; "
                 + "if [ \"$s\" = device ]; then echo PORT=$p; "
                 + "adb -s 127.0.0.1:$p shell \"pm grant " + c.getPackageName() + " " + SECURE + "\" >/dev/null 2>&1; "
-                + "adb -s 127.0.0.1:$p shell \"" + helper + "\"; sleep 2; echo LOG=; "
+                + "adb -s 127.0.0.1:$p shell </root/.android/helper.sh; sleep 2; echo LOG=; "
                 + "adb -s 127.0.0.1:$p shell \"tail -c 1500 " + LOG + "\" 2>&1; break; fi; "
                 + "adb disconnect 127.0.0.1:$p >/dev/null 2>&1; done; adb kill-server >/dev/null 2>&1";
         try {
@@ -629,6 +675,8 @@ final class Background {
             return out;
         } catch (Exception e) {
             return String.valueOf(e.getMessage());
+        } finally {
+            cmd.delete();
         }
     }
 
@@ -802,7 +850,11 @@ final class Background {
                     set(Step.FAILED, svc.getString(R.string.background_needs_linux));
                     return;
                 }
-                if (Prefs.devShellUsed(svc)) { // an agent's shell may have changed Buddy's Linux, adb with it
+                boolean shellBefore;
+                synchronized (SHELLS) { // with shellsAllowed: a shell starts first and marks it, or not at all now
+                    shellBefore = Prefs.devShellUsed(svc) || hadLinuxTools(svc);
+                }
+                if (shellBefore) { // a shell may have changed Buddy's Linux, adb with it
                     set(Step.FAILED, svc.getString(R.string.background_after_dev));
                     return;
                 }

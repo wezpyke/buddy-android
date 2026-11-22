@@ -75,11 +75,18 @@ public class AdbKeyIsolationTest {
         String before = Linux.exec(c, READ, 60);
         assertTrue("reproduces the old exposure: " + before, before.contains(KEY));
 
-        // Buddy's own adb command: the key is there for adb, and it moved out of Alpine
-        String adb = Linux.execAdb(c, READ, 60);
-        assertTrue("adb still has its key: " + adb, adb.contains(KEY));
+        // Buddy's own adb command: a key from Alpine was exposed, so it's deleted, never used again
+        String gone = Linux.execAdb(c, READ, 60);
+        assertTrue("the exposed key isn't used: " + gone, gone.contains("NO_KEY"));
         assertFalse("not in Alpine any more", new File(Linux.root(c), "root/.android/adbkey").exists());
-        assertTrue("in Buddy's storage", new File(Linux.adbHome(c), "adbkey").exists());
+        assertFalse("nor moved", new File(Linux.adbHome(c), "adbkey").exists());
+
+        // a new key, as pairing again makes it, in Buddy's storage: adb sees it
+        try (FileOutputStream o = new FileOutputStream(new File(Linux.adbHome(c), "adbkey"))) {
+            o.write(KEY.getBytes(StandardCharsets.UTF_8));
+        }
+        String adb = Linux.execAdb(c, READ, 60);
+        assertTrue("adb has its key: " + adb, adb.contains(KEY));
 
         // an agent's shell: not at /root/.android, nowhere in Alpine, not by the key's real path
         String agent = Linux.exec(c, READ + "; grep -rl " + KEY + " /root /home /tmp /etc /usr /var /opt /srv /mnt 2>/dev/null | head -3; echo SCAN_DONE; "
@@ -96,7 +103,11 @@ public class AdbKeyIsolationTest {
     public void agentCantReachTheKeyThroughProcWhileAdbRuns() throws Exception {
         // proot shares /proc: while Buddy's adb runs, a shell tries the key through every process's root there, by its
         // place in Alpine and by its real path. (Linux tools are off with background mode anyway, see ChatHub.devArg.)
-        Linux.execAdb(c, "true", 60);
+        Linux.execAdb(c, "true", 60); // (the old key goes)
+        Linux.adbHome(c).mkdirs();
+        try (FileOutputStream o = new FileOutputStream(new File(Linux.adbHome(c), "adbkey"))) {
+            o.write(KEY.getBytes(StandardCharsets.UTF_8));
+        }
         Thread adb = new Thread(() -> {
             try {
                 Linux.execAdb(c, "sleep 8", 30);

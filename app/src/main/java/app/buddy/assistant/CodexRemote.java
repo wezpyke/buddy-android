@@ -101,6 +101,7 @@ final class CodexRemote {
     private static void run(Context app) {
         String prev = "", last = ""; // its last two lines, for the error
         try {
+            Background.requireShells(app); // a shell in Buddy's Linux: not beside background mode
             Helper.sync(app);
             Process p = Linux.builder(app, "/bin/sh", "/root/bin/codex-remote", Prefs.token(app)).start();
             synchronized (CodexRemote.class) {

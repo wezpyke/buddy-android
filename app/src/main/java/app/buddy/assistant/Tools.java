@@ -530,6 +530,12 @@ final class Tools {
         if (READS.contains(name)) {
             String no = privateGate();
             if (no != null) return text(no);
+            if (!"read_screen".equals(name) && !"screenshot".equals(name)) {
+                // find, collect and wait_for go on reading while the screen changes: asked again before they answer
+                String r = "find".equals(name) ? find(a) : "collect".equals(name) ? collect(a) : waitFor(a);
+                no = privateGate();
+                return text(no != null ? no : r);
+            }
         }
         switch (name) {
             case "read_screen": return text(readScreen());
@@ -930,6 +936,8 @@ final class Tools {
         String caller = McpServer.CALLER_KEY.get();
         if (caller == null) caller = Background.OUTSIDE;
         java.util.LinkedHashSet<String> pkgs = new java.util.LinkedHashSet<>();
+        String front = frontPkg(); // a window that hides its content from Buddy still shows in a screenshot
+        if (front != null) pkgs.add(front);
         for (AccessibilityWindowInfo w : windows()) {
             if (w.getType() != AccessibilityWindowInfo.TYPE_APPLICATION) continue;
             AccessibilityNodeInfo root = w.getRoot();
@@ -938,9 +946,12 @@ final class Tools {
         for (String pkg : pkgs) {
             if (!Guard.privateApp(svc, pkg) || Guard.mayView(caller, pkg)) continue;
             String app = appName(pkg);
-            String no = guardAction("Let you see " + app + "'s screen",
-                    in -> svc.getString(R.string.tools_card_view, app), null, false, false, true);
-            if (no != null) return no;
+            // a card of its own, every time: an approval the agent got for something else never covers it
+            String answer = svc.askConfirm(svc.getString(R.string.tools_card_view, app));
+            if (!answer.startsWith("APPROVED")) {
+                return "BLOCKED by Buddy's safety rule: the user did not let you see " + app + "'s screen. Don't retry "
+                        + "it; ask the user what they want.";
+            }
             Guard.allowView(caller, pkg);
         }
         return null;
@@ -1905,11 +1916,18 @@ final class Tools {
             return ownScreen("taps");
         }
         AccessibilityNodeInfo target = element != null ? element : hit;
-        if (target == null) return null;
+        if (target == null) {
+            // nothing Buddy can see under the finger (a window that hides its content, a screen changing): in a
+            // locked-down app, or one Buddy can't tell, that is no reason to let the tap through
+            String front = frontPkg();
+            if (front != null && !Guard.lockedDown(svc, front)) return null;
+            return guardAction("Tap a spot Buddy can't read", in -> tapCard(null, in), null, false, false, true);
+        }
         String pkg = str(target.getPackageName());
         firstUse(pkg);
         String mode = mode(pkg);
-        if ("trust".equals(mode)) return null;
+        // Trust waves a tap through, except a suggested one in a locked-down app (only the user's own Trust does there)
+        if ("trust".equals(mode) && !Guard.lockedDown(svc, pkg)) return null;
         String label = Guard.buttonLabel(target);
         String app = frontName();
         Guard.remember(svc, label, pkg, app);
@@ -2242,14 +2260,26 @@ final class Tools {
      * The checks every touch gets, for a scroll or swipe (element: what it was aimed at, may be null; then the
      * points it touches): no touching while a card waits, and never on Buddy's own screens. null when it may go.
      */
-    private String guardStroke(AccessibilityNodeInfo element, int... xy) {
+    private String guardStroke(AccessibilityNodeInfo element, int... xy) throws InterruptedException {
         if (svc.bubble() != null && svc.bubble().confirming()) {
             return "BLOCKED: a card is waiting for the user's answer. Wait for it; don't touch the screen.";
         }
         boolean off = element != null && Guard.offLimits(svc, element);
         List<AccessibilityWindowInfo> windows = windows();
         for (int i = 0; !off && i + 1 < xy.length; i += 2) off = Guard.offLimits(svc, Guard.nodeAt(windows, xy[i], xy[i + 1]));
-        return off ? ownScreen("touches") : null;
+        if (off) return ownScreen("touches");
+        // A stroke that starts and ends on the same clickable thing is a click to Android (it only cancels a press
+        // that leaves the view), however far it moves inside it: it gets every check a tap gets
+        if (xy.length >= 4) {
+            AccessibilityNodeInfo start = Guard.nodeAt(windows, xy[0], xy[1]);
+            for (int i = 0; start != null && !start.isClickable() && i < 8; i++) start = start.getParent();
+            if (start != null && !start.isScrollable()) {
+                Rect b = new Rect();
+                start.getBoundsInScreen(b);
+                if (b.contains(xy[xy.length - 2], xy[xy.length - 1])) return guard(null, start);
+            }
+        }
+        return null;
     }
 
     /** A finger's path that also remembers its points: the helper of background mode takes points, not a Path. */

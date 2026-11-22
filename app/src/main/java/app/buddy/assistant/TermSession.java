@@ -81,6 +81,7 @@ final class TermSession implements TermEmulator.Host {
     }
 
     private static TermSession launch(Context c, int rows, int cols, String shell) throws IOException {
+        Background.requireShells(c); // a shell in Buddy's Linux (the terminal, Claude Code for dictation): not beside it
         TermSession s = new TermSession(rows, cols);
         Helper.sync(c); // the shell profile (/etc/profile.d/buddy.sh) comes with the helper files
         String lib = c.getApplicationInfo().nativeLibraryDir;

@@ -93,6 +93,7 @@ final class RemoteSession {
 
     private static void run(Context app) {
         try {
+            Background.requireShells(app); // Claude Code with its shell: not beside background mode
             prepare(app);
             boolean resume = hasConversation(app);
             String cmd = "stty cols 100 rows 40; exec claude --remote-control \"" + Prefs.remoteName(app) + "\""

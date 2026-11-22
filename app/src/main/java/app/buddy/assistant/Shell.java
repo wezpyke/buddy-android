@@ -116,7 +116,9 @@ public final class Shell {
 
     public static void main(String[] a) throws Exception {
         final int port = Integer.parseInt(a[0]);
-        final String token = a[1];
+        // the secret: from the environment (Background.launch), so it's on no command line; an argument still works
+        final String token = a.length > 1 ? a[1] : System.getenv("BUDDY_TOKEN");
+        if (token == null || token.isEmpty()) throw new IllegalArgumentException("no BUDDY_TOKEN");
         Looper.prepareMainLooper();
         try {
             dm = displayManager();

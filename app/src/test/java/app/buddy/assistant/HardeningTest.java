@@ -37,7 +37,7 @@ public class HardeningTest {
     @Test
     public void plainButtonsAndLookalikeWordsGoThrough() {
         for (String s : new String[]{"Next", "Done", "Open chat", "Search", "Recent calls", "Settings", "Back",
-                "Sendai trip", "Payload", "Callum", "Ordering tips and more"}) {
+                "Sendai trip", "Payload", "Callum", "Ordering tips and more", "Silver", "Postcode", "Calligraphy"}) {
             assertNull("should not ask: " + s, Guard.riskyText(s));
         }
     }
@@ -76,6 +76,57 @@ public class HardeningTest {
         assertFalse(Guard.lockedDown(c, "com.example.notes"));
         Prefs.setAppSafety(c, "com.whatsapp", "trust");
         assertFalse("the user's Trust wins", Guard.lockedDown(c, "com.whatsapp"));
+    }
+
+    @Test
+    public void shopsAndBrowsersAreNeverSuggestedTrust() {
+        Prefs.setAutonomousDefault(c, true); // "work on its own" at setup
+        assertEquals("trust", Guard.mode(c, "com.example.notes", null));
+        assertEquals("hard", Guard.mode(c, "com.amazon.mShop.android.shopping", null));
+        assertEquals("hard", Guard.mode(c, "com.einnovation.temu", null));
+        Prefs.setAppSafety(c, "com.ebay.mobile", "trust");
+        assertEquals("the user's own Trust", "trust", Guard.mode(c, "com.ebay.mobile", null));
+        assertFalse(Guard.lockedDown(c, "com.ebay.mobile"));
+    }
+
+    // ------------------------------------------------------------------ shells and background mode
+
+    private static void stepTo(String name) throws Exception {
+        Field f = Background.class.getDeclaredField("step");
+        f.setAccessible(true);
+        for (Object o : Class.forName("app.buddy.assistant.Background$Step").getEnumConstants()) {
+            if (((Enum<?>) o).name().equals(name)) f.set(null, o);
+        }
+    }
+
+    @Test
+    public void everyShellRouteIsRefusedBesideBackgroundMode() throws Exception {
+        assertTrue(Background.shellsAllowed(c));
+        assertTrue("a shell marks Buddy's Linux", Prefs.devShellUsed(c));
+        Prefs.setBackgroundPaired(c, true);
+        assertFalse(Background.shellsAllowed(c));
+        try {
+            Background.requireShells(c); // the terminal, Remote Control, Codex's remote, the SSH server
+            throw new AssertionError("a shell started beside background mode");
+        } catch (java.io.IOException expected) {
+            assertTrue(expected.getMessage().contains("background mode"));
+        }
+        Prefs.setBackgroundPaired(c, false);
+        stepTo("PAIRING");
+        try {
+            assertFalse("while setting up", Background.shellsAllowed(c));
+        } finally {
+            stepTo("IDLE");
+        }
+    }
+
+    @Test
+    public void restoringABackupKeepsTheSafetySettings() throws Exception {
+        Method stays = Backup.class.getDeclaredMethod("stays", String.class);
+        stays.setAccessible(true);
+        assertTrue((Boolean) stays.invoke(null, "dev_shell_used"));
+        assertTrue((Boolean) stays.invoke(null, "app_private_uk.co.santander.bank"));
+        assertFalse((Boolean) stays.invoke(null, "app_safety_com.example.notes"));
     }
 
     // ------------------------------------------------------------------ private apps

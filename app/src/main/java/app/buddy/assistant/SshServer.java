@@ -102,6 +102,7 @@ final class SshServer {
     private static void run(Context app) {
         String prev = "", last = ""; // its last two lines, for the error (a failed bind is two)
         try {
+            Background.requireShells(app); // a shell in Buddy's Linux: not beside background mode
             prepare(app);
             Process p = Linux.builder(app, "/usr/sbin/sshd", "-D", "-e", "-f", CONFIG).start();
             synchronized (SshServer.class) {
