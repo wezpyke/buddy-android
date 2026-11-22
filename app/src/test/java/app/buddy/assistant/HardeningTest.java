@@ -54,6 +54,24 @@ public class HardeningTest {
     }
 
     @Test
+    public void shoppingAppsAndBrowsersAreLockedDown() {
+        for (String p : new String[]{"com.amazon.mShop.android.shopping", "com.ebay.mobile", "com.einnovation.temu",
+                "com.zzkko", "com.tesco.grocery.view", "uk.co.deliveroo.orderapp", "fr.vinted"}) {
+            assertTrue("locked down: " + p, Guard.lockedDown(c, p));
+        }
+        String browser = "org.example.browser";
+        android.content.Intent view = new android.content.Intent(android.content.Intent.ACTION_VIEW,
+                android.net.Uri.parse("https://example.com/")).addCategory(android.content.Intent.CATEGORY_BROWSABLE)
+                .setPackage(browser);
+        android.content.pm.ResolveInfo ri = new android.content.pm.ResolveInfo();
+        ri.activityInfo = new android.content.pm.ActivityInfo();
+        ri.activityInfo.packageName = browser;
+        ri.activityInfo.name = browser + ".Main";
+        org.robolectric.Shadows.shadowOf(c.getPackageManager()).addResolveInfoForIntent(view, ri);
+        assertTrue("a browser", Guard.lockedDown(c, browser));
+    }
+
+    @Test
     public void ordinaryAppsAndTrustedAppsAreNot() {
         assertFalse(Guard.lockedDown(c, "com.example.notes"));
         Prefs.setAppSafety(c, "com.whatsapp", "trust");

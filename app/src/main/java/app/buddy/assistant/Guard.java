@@ -312,17 +312,27 @@ final class Guard {
                 : new String[]{"hard", c.getString(R.string.guard_why_setup)};
     }
 
+    /** Shopping and delivery apps by their package or name (Android has no shopping category). */
+    private static final Pattern SHOP_NAME = Pattern.compile("(?i)(shop|amazon|ebay|etsy|argos|tesco|sainsbury|asda|ocado"
+            + "|deliveroo|ubercab\\.eats|uber eats|justeat|just eat|vinted|depop|aliexpress|temu|shein|zzkko|walmart|ikea)");
+
     /**
      * One of Buddy's built-in sensitive apps (messaging, email, social, calls, stores, Settings and installers, money
-     * apps) that the user hasn't put on Trust: every tap there asks, whatever its label, unless the user listed that
-     * button as never asking. A label can't be relied on: "OK", "Approve" and an icon all pay or send as well.
+     * apps, shopping apps, browsers) that the user hasn't put on Trust: every tap there asks, whatever its label,
+     * unless the user listed that button as never asking. A label can't be relied on: "OK", "Approve" and an icon all
+     * pay or send as well, and a browser can be any shop or bank.
      */
     static boolean lockedDown(android.content.Context c, String pkg) {
         if (pkg == null) return true;
         if ("trust".equals(Prefs.appSafety(c, pkg))) return false;
         if (HARD_BY_DEFAULT.contains(pkg) || NEVER_ALLOWED.matcher(pkg).find() || moneyApp(c, pkg)) return true;
+        if (SHOP_NAME.matcher(pkg).find() || browser(c, pkg)) return true;
         try {
-            return c.getPackageManager().getApplicationInfo(pkg, 0).category == android.content.pm.ApplicationInfo.CATEGORY_SOCIAL;
+            android.content.pm.PackageManager pm = c.getPackageManager();
+            android.content.pm.ApplicationInfo ai = pm.getApplicationInfo(pkg, 0);
+            if (ai.category == android.content.pm.ApplicationInfo.CATEGORY_SOCIAL) return true;
+            CharSequence label = pm.getApplicationLabel(ai);
+            return label != null && SHOP_NAME.matcher(label).find();
         } catch (Exception e) {
             return false;
         }
